@@ -1,7 +1,7 @@
 .PHONY: build test push service_test tmpl deploy lint clean
 
 BRANCH=$(shell git symbolic-ref --short HEAD)
-PROJECT_PATH=/go/src/github.com/storj/bridge
+PROJECT_PATH=/go/src/github.com/coyle/bridge
 
 build:
 	docker network create test-net
