@@ -129,13 +129,22 @@ func (u *User) Reactivate(w http.ResponseWriter, r *http.Request, _ httprouter.P
 func (u *User) ConfirmActivation(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	user, err := u.db.GetUserByToken("activator", ps.ByName("token"))
 	if err != nil {
-		// TODO(coyle): handle error
+		u.logger.Log("Failed to Get user with provided token", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	if err := u.db.ActivateUser(user.ID); err != nil {
-		// TODO(coyle): handle error
+		u.logger.Log("Failed to activate user", err, "ID", user.ID)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	user.Activated = true
+	json.NewEncoder(w).Encode(mongodb.UserToView(user))
 }
 
 // Remove a user

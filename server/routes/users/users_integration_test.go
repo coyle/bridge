@@ -136,7 +136,67 @@ func TestReactivate(t *testing.T) {
 }
 
 func TestConfirmActivation(t *testing.T) {
-	assert.NotNil(t, nil)
+	storageClient, err := mongodb.NewClient(os.Getenv("MONGO"))
+	assert.NoError(t, err)
+
+	testUser := mongodb.TestUser(false)
+	testUser.Activator = testUser.UUID
+
+	_, err = storageClient.CreateUser(*testUser)
+	assert.NoError(t, err)
+
+	cases := []struct {
+		name                 string
+		id                   string
+		activator            string
+		expectedResponseCode int
+		expectedError        bool
+		expectedUser         mongodb.User
+	}{
+		{
+			name:                 "valid user activation",
+			activator:            testUser.Activator,
+			expectedResponseCode: http.StatusOK,
+		},
+	}
+
+	for _, c := range cases {
+		url := fmt.Sprintf("http://bridge-server:8080/activations/%s", c.activator)
+		req, _ := http.NewRequest("GET", url, nil)
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{}
+		resp, _ := client.Do(req)
+		if resp.StatusCode != c.expectedResponseCode {
+			assert.Equal(t, c.expectedResponseCode, resp.StatusCode)
+		}
+
+		if c.expectedError {
+			continue
+		}
+
+		u := mongodb.User{}
+		json.NewDecoder(resp.Body).Decode(&u)
+
+		// assert the user's private fields are omitted
+		assert.Empty(t, u.ID)
+		assert.Empty(t, u.Hashpass)
+		assert.Empty(t, u.Activator)
+		assert.Empty(t, u.Deactivator)
+		assert.Empty(t, u.Resetter)
+		assert.Empty(t, u.BytesDownloaded)
+		assert.Empty(t, u.BytesUploaded)
+
+		// assert expected fields are there
+		assert.Equal(t, testUser.UUID, u.UUID)
+		assert.Equal(t, testUser.IsFreeTier, u.IsFreeTier)
+		assert.Equal(t, true, u.Activated)
+		assert.WithinDuration(t, testUser.Created, u.Created, 1*time.Second)
+
+		us, err := storageClient.GetUser(testUser.ID)
+		assert.NoError(t, err)
+		assert.Equal(t, us.Activator, "")
+	}
 }
 
 func TestDeactivation(t *testing.T) {

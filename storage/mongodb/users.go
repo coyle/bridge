@@ -87,7 +87,7 @@ func (c *Client) GetUserByToken(name, token string) (*User, error) {
 
 // ActivateUser flips the activate flag on the user model with the provided ID
 func (c *Client) ActivateUser(id string) error {
-	return c.users.UpdateId(id, bson.M{"$set": bson.M{"activate": true, "activator": nil}})
+	return c.users.UpdateId(id, bson.M{"$set": bson.M{"activated": true, "activator": nil}})
 }
 
 // DeactivateUser sets the deactivator to a randomly generated hex string
