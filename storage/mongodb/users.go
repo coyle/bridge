@@ -14,24 +14,26 @@ import (
 )
 
 var (
+	// ErrInvalidID is returned when the user ID is not in compliance with RFC 5322
 	ErrInvalidID = errors.New("invalid id format")
 )
 
 // User defines the user schema
 type User struct {
-	ID                string      `bson:"_id" json:"id"`
-	UUID              string      `json:"uuid"`
-	Hashpass          string      `json:"hashpass"`
+	ID                string      `bson:"_id" json:"id,omitempty"`
+	UUID              string      `json:"uuid,omitempty"`
+	Hashpass          string      `json:"hashpass,omitempty"`
 	Activated         bool        `json:"activated"`
 	IsFreeTier        bool        `json:"isFreeTier"`
-	Activator         string      `json:"activator"`
+	Activator         string      `json:"activator,omitempty"`
+	Deactivator       string      `json:"deactivator,omitempty"`
 	Created           time.Time   `json:"created"`
-	BytesUploaded     BytesMeta   `json:"bytesUploaded"`
-	BytesDownloaded   BytesMeta   `json:"bytesDownloaded"`
-	PaymentProcessors []string    `json:"paymentProcessors"`
-	ReferralPartner   string      `json:"referralPartner"`
-	Preferences       Preferences `json:"preferences"`
-	Resetter          string      `json:"resetter"`
+	BytesUploaded     BytesMeta   `json:"bytesUploaded,omitempty"`
+	BytesDownloaded   BytesMeta   `json:"bytesDownloaded,omitempty"`
+	PaymentProcessors []string    `json:"paymentProcessors,omitempty"`
+	ReferralPartner   string      `json:"referralPartner,omitempty"`
+	Preferences       Preferences `json:"preferences,omitempty"`
+	Resetter          string      `json:"resetter,omitempty"`
 }
 
 // Preferences contains all user preferences
@@ -51,8 +53,15 @@ type BytesMeta struct {
 
 // CreateUser initalizes and saves a new user in the Users collection
 func (c *Client) CreateUser(u User) (User, error) {
-	u.Created = time.Now().UTC()
-	u.UUID = uuid.New().String()
+	zeroTime := time.Time{}
+	if u.Created == zeroTime {
+		u.Created = time.Now().UTC()
+	}
+
+	if u.UUID == "" {
+		u.UUID = uuid.New().String()
+	}
+
 	if _, err := mail.ParseAddress(u.ID); err != nil {
 		return User{}, ErrInvalidID
 	}
@@ -110,4 +119,17 @@ func (c *Client) ResetPassword(id, p string) error {
 	h.Write([]byte(p))
 
 	return c.users.UpdateId(id, bson.M{"$set": bson.M{"resetter": "", "hashpass": fmt.Sprintf("%x", h.Sum(nil))}})
+}
+
+// UserToView returns a user object with private fields hidden
+func UserToView(u *User) *User {
+	return &User{
+		UUID:              u.UUID,
+		Activated:         u.Activated,
+		IsFreeTier:        u.IsFreeTier,
+		Created:           u.Created,
+		PaymentProcessors: u.PaymentProcessors,
+		ReferralPartner:   u.ReferralPartner,
+		Preferences:       u.Preferences,
+	}
 }

@@ -72,7 +72,6 @@ func (u *User) Create(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 	// do all concurrently ?
 	user, err := u.db.CreateUser(nuser)
 	if err != nil && err == mongodb.ErrInvalidID {
-		fmt.Println("@ invalid Id")
 		u.logger.Log("Error creating user", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -86,16 +85,7 @@ func (u *User) Create(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 	// TODO(coyle): implement Email service
 	defer u.dispatchActivationEmailSwitch(user)
 
-	if body.PublicKey == "" {
-		fmt.Println("no pub key")
-		u.logger.Log("No PublicKey provided", err)
-		// TODO(coyle): properly handle
-		return
-	}
-
-	fmt.Println("creating public key")
 	if err := u.db.CreatePublicKey(&user, body.PublicKey); err != nil {
-		fmt.Printf("errors: %s\n", err)
 		u.logger.Log("Error creating public key", err)
 		// TODO(coyle): Should we cancel the request and remove the created user or just log?
 		// looks like the node code currently removes the created user
@@ -109,7 +99,8 @@ func (u *User) Create(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 func (u *User) Reactivate(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	body, err := getBody(r)
 	if err != nil {
-		// TODO(coyle): handle error
+		u.logger.Log("invalid request body", err)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -127,7 +118,11 @@ func (u *User) Reactivate(w http.ResponseWriter, r *http.Request, _ httprouter.P
 	// TODO(coyle): implement Email service
 	go u.dispatchActivationEmailSwitch(*user)
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+
+	json.NewEncoder(w).Encode(mongodb.UserToView(user))
+
 }
 
 // ConfirmActivation of a user
