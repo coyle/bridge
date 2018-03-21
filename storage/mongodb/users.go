@@ -24,6 +24,7 @@ type User struct {
 	UUID              string      `json:"uuid,omitempty"`
 	Hashpass          string      `json:"hashpass,omitempty"`
 	Activated         bool        `json:"activated"`
+	Deactivated       bool        `json:"deactivated"`
 	IsFreeTier        bool        `json:"isFreeTier"`
 	Activator         string      `json:"activator,omitempty"`
 	Deactivator       string      `json:"deactivator,omitempty"`
@@ -102,7 +103,7 @@ func (c *Client) DeactivateUser(id string) error {
 func (c *Client) ConfirmUserDeactivation(id string) error {
 	b := make([]byte, 256)
 	rand.Read(b)
-	return c.users.UpdateId(id, bson.M{"$set": bson.M{"deactivate": true, "activated": false, "activator": hex.EncodeToString(b)}})
+	return c.users.UpdateId(id, bson.M{"$set": bson.M{"deactivated": true, "activated": false, "activator": hex.EncodeToString(b)}})
 }
 
 // CreatePasswordResetToken generates a random hex string and saves to the user document

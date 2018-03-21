@@ -2,7 +2,6 @@ package users
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 
@@ -38,17 +37,14 @@ func NewServer(client *mongodb.Client, logger log.Logger) *User {
 
 // Create a new user
 func (u *User) Create(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	fmt.Println("@ beginning")
 	body, err := getBody(r)
 	if err != nil {
 		u.logger.Log("Error getting body", err)
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Printf("@ body\n%s\n", err)
 		return
 	}
 
 	if body.PublicKey == "" {
-		fmt.Println("@ no pubkey")
 		u.logger.Log("No PublicKey provided", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -60,7 +56,6 @@ func (u *User) Create(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 	}
 
 	if body.ReferralPartner != "" {
-		fmt.Println("@ no rp")
 		p, err := u.db.GetPartner(body.ReferralPartner)
 		if err != nil {
 			u.logger.Log("Error getting partner", err)
@@ -151,61 +146,110 @@ func (u *User) ConfirmActivation(w http.ResponseWriter, r *http.Request, ps http
 func (u *User) Remove(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	user, err := u.db.GetUser(ps.ByName("id"))
 	if err != nil {
-		// TODO(coyle): handle error
+		u.logger.Log("failed to get user", "ID", ps.ByName("id"))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
-	// TODO(coyle): determine how to do check req.user._id !== user._id from node code
-	// what is being passed in as req.user
+	userID, _, ok := r.BasicAuth()
+	if !ok {
+		u.logger.Log("failed to get user authentication", "ID", ps.ByName("id"))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if userID != user.ID {
+		u.logger.Log("auth user ID did not match request ID", "request_id", ps.ByName("id"), "auth_id", userID)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	// TODO(coyle): dispatch email after mail service is completed
 
 	if err := u.db.DeactivateUser(user.ID); err != nil {
-		// TODO(coyle): handle error
+		u.logger.Log("failed to deactivate user", "ID", ps.ByName("id"))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	json.NewEncoder(w).Encode(mongodb.UserToView(user))
 
 }
 
 // ConfirmDeactivation of a user
 func (u *User) ConfirmDeactivation(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	user, err := u.db.GetUserByToken("activator", ps.ByName("token"))
+	user, err := u.db.GetUserByToken("deactivator", ps.ByName("token"))
 	if err != nil {
-		// TODO(coyle): handle error
+		u.logger.Log("failed to get user", "token", ps.ByName("token"))
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if err := u.db.ConfirmUserDeactivation(user.ID); err != nil {
-		// TODO(coyle): handle error
+		u.logger.Log("failed to confirm deactivate user", "ID", ps.ByName("id"))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	json.NewEncoder(w).Encode(mongodb.UserToView(user))
 }
 
 // CreatePasswordResetToken for a user
 func (u *User) CreatePasswordResetToken(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	user, err := u.db.GetUser(ps.ByName("id"))
 	if err != nil {
-		// TODO(coyle): handle error
+		u.logger.Log("failed to get user", "ID", ps.ByName("id"))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	_, err = u.db.CreatePasswordResetToken(user.ID)
 	if err != nil {
-		// TODO(coyle): handle error
+		u.logger.Log("failed to create password reset token", "ID", ps.ByName("id"))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	// TODO(coyle): dispatch email after mail service is completed
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	json.NewEncoder(w).Encode(mongodb.UserToView(user))
 }
 
 // ConfirmPasswordReset for a user
 func (u *User) ConfirmPasswordReset(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	body, err := getBody(r)
+	if err != nil {
+		u.logger.Log("unable to get request body")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	user, err := u.db.GetUserByToken("resetter", ps.ByName("token"))
 	if err != nil {
-		// TODO(coyle): handle error
+		u.logger.Log("failed to find user")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	if err := u.db.ResetPassword(user.ID, body.Password); err != nil {
-		// TODO(coyle): handle error
+		u.logger.Log("failed to reset password")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	json.NewEncoder(w).Encode(mongodb.UserToView(user))
 }
 
 func (u *User) dispatchActivationEmailSwitch(usr mongodb.User) {

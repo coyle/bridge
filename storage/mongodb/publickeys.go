@@ -2,7 +2,6 @@ package mongodb
 
 import (
 	"encoding/hex"
-	"fmt"
 
 	"github.com/coyle/bridge/storage"
 	"github.com/globalsign/mgo"
@@ -19,27 +18,22 @@ type PublicKey struct {
 
 // CreatePublicKey instantiates a new PublicKey for a user
 func (c *Client) CreatePublicKey(u *User, pubKey string) error {
-	fmt.Printf("in CreatePublicKey\n")
 	pk, err := hex.DecodeString(pubKey)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
 	if valid := secp256k1.VerifyPubkey(pk); valid != 1 {
-		fmt.Println(storage.ErrInvalidPublicKey)
 		return storage.ErrInvalidPublicKey
 	}
 
 	// if key exists return error
 	exists, err := c.PublicKeyExists(pubKey)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
 	if exists {
-		fmt.Printf("exists: %t\n", exists)
 		return nil
 	}
 
@@ -48,7 +42,7 @@ func (c *Client) CreatePublicKey(u *User, pubKey string) error {
 		ID:   pubKey,
 		User: u.ID,
 	}
-	fmt.Printf("struct: %#v\n", pubk)
+
 	return c.publicKeys.Insert(pubk)
 }
 
